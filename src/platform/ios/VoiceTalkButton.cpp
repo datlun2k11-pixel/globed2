@@ -19,7 +19,7 @@ VoiceTalkButton* VoiceTalkButton::create() {
 }
 
 bool VoiceTalkButton::init() {
-    if (!CCNode::init()) return false;
+    if (!CCLayer::init()) return false;
 
     this->setContentSize({64.f, 64.f});
     this->setAnchorPoint({0.5f, 0.5f});
@@ -107,7 +107,7 @@ void VoiceTalkButton::setTalking(bool talking) {
     }
 }
 
-bool VoiceTalkButton::ccTouchBegan(CCTouch* touch, CEvent* event) {
+bool VoiceTalkButton::ccTouchBegan(CCTouch* touch, CCEvent* event) {
     if (!this->isVisible()) return false;
     auto pos = this->convertTouchToNodeSpace(touch);
     auto size = this->getContentSize();
@@ -122,7 +122,7 @@ bool VoiceTalkButton::ccTouchBegan(CCTouch* touch, CEvent* event) {
     return true;
 }
 
-void VoiceTalkButton::ccTouchEnded(CCTouch* touch, CEvent* event) {
+void VoiceTalkButton::ccTouchEnded(CCTouch* touch, CCEvent* event) {
     if (!m_touching) return;
     m_touching = false;
     this->setTalking(false);
@@ -130,7 +130,7 @@ void VoiceTalkButton::ccTouchEnded(CCTouch* touch, CEvent* event) {
     this->runAction(CCScaleTo::create(0.05f, 1.0f));
 }
 
-void VoiceTalkButton::ccTouchCancelled(CCTouch* touch, CEvent* event) {
+void VoiceTalkButton::ccTouchCancelled(CCTouch* touch, CCEvent* event) {
     this->ccTouchEnded(touch, event);
 }
 

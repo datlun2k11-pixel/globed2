@@ -7,7 +7,7 @@ namespace globed {
 
 // Simple hold-to-talk button for iOS
 // Shows mic icon, turns red when transmitting
-class VoiceTalkButton : public cocos2d::CCNode {
+class VoiceTalkButton : public cocos2d::CCLayer {
 public:
     static VoiceTalkButton* create();
     bool init() override;
@@ -20,9 +20,9 @@ private:
     bool m_touching = false;
 
     void setTalking(bool talking);
-    bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CEvent* event);
-    void ccTouchEnded(cocos2d::CCTouch* touch, cocos2d::CEvent* event);
-    void ccTouchCancelled(cocos2d::CCTouch* touch, cocos2d::CEvent* event);
+    bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CCEvent* event) override;
+    void ccTouchEnded(cocos2d::CCTouch* touch, cocos2d::CCEvent* event) override;
+    void ccTouchCancelled(cocos2d::CCTouch* touch, cocos2d::CCEvent* event) override;
     void registerWithTouchDispatcher() override;
 };
 
