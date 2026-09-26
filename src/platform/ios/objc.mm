@@ -101,49 +101,57 @@ std::unique_ptr<unsigned char[]> getFileDataImpl(geode::ZStringView path, unsign
     return nullptr;
 }
 
-// Voice chat iOS audio session setup - required for FMOD recording on iOS
-// Must use PlayAndRecord category, otherwise System::recordStart returns FMOD_ERR_RECORD
-void setupIosAudioSession() {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        NSError* error = nil;
-        AVAudioSession* session = [AVAudioSession sharedInstance];
+// Voice chat iOS audio session setup
+// Default (voice OFF): Playback category, Default mode -> game volume normal, no ducking
+// Voice ON: PlayAndRecord + VoiceChat mode -> enables AEC but ducks game audio intentionally
+static bool s_voiceActive = false;
 
-        // PlayAndRecord is mandatory for simultaneous playback + mic capture via FMOD
-        // AllowBluetooth enables AirPods / BT headset, DefaultToSpeaker uses loudspeaker (not earpiece)
-        // MixWithOthers allows GD music to keep playing
+void applyIosAudioSession(bool voiceOn) {
+    s_voiceActive = voiceOn;
+    NSError* error = nil;
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+
+    if (voiceOn) {
+        // Voice ON: PlayAndRecord + VoiceChat AEC - game will be slightly ducked (intentional)
         BOOL ok = [session setCategory:AVAudioSessionCategoryPlayAndRecord
                           withOptions:AVAudioSessionCategoryOptionAllowBluetooth
                                      | AVAudioSessionCategoryOptionAllowBluetoothA2DP
                                      | AVAudioSessionCategoryOptionDefaultToSpeaker
                                      | AVAudioSessionCategoryOptionMixWithOthers
                                 error:&error];
-        if (!ok) {
-            log::warn("Failed to set AVAudioSession category: {}", [[error localizedDescription] UTF8String]);
-        }
-
-        // VoiceChat mode enables hardware echo cancellation / AEC on iOS
-        // This fixes the "lặp tiếng / echo" when mic captures speaker output on loudspeaker
+        if (!ok) log::warn("Failed to set PlayAndRecord: {}", [[error localizedDescription] UTF8String]);
         [session setMode:AVAudioSessionModeVoiceChat error:nil];
+        log::info("iOS AVAudioSession: Voice ON (PlayAndRecord + VoiceChat AEC, game ducked)");
+    } else {
+        // Voice OFF: Playback + Default mode -> restores full game volume
+        BOOL ok = [session setCategory:AVAudioSessionCategoryPlayback
+                          withOptions:AVAudioSessionCategoryOptionMixWithOthers
+                                error:&error];
+        if (!ok) log::warn("Failed to set Playback: {}", [[error localizedDescription] UTF8String]);
+        [session setMode:AVAudioSessionModeDefault error:nil];
+        log::info("iOS AVAudioSession: Voice OFF (Playback, volume restored)");
+    }
 
-        // Set preferred sample rate to match Globed voice (48000 or 24000)
-        [session setPreferredSampleRate:48000 error:nil];
-        [session setPreferredIOBufferDuration:0.01 error:nil];
+    [session setPreferredSampleRate:48000 error:nil];
+    [session setPreferredIOBufferDuration:0.01 error:nil];
+    [session setActive:YES error:&error];
+}
 
-        ok = [session setActive:YES error:&error];
-        if (!ok) {
-            log::warn("Failed to activate AVAudioSession: {}", [[error localizedDescription] UTF8String]);
-        } else {
-            log::info("iOS AVAudioSession configured for voice chat (PlayAndRecord)");
-        }
+void setupIosAudioSession() {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        // Start with voice OFF - normal game volume
+        applyIosAudioSession(false);
 
         // Listen for interruptions (phone call, Siri) to reactivate session
+        AVAudioSession* session = [AVAudioSession sharedInstance];
         [[NSNotificationCenter defaultCenter] addObserverForName:AVAudioSessionInterruptionNotification
             object:session queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note) {
                 NSInteger type = [note.userInfo[AVAudioSessionInterruptionTypeKey] integerValue];
                 if (type == AVAudioSessionInterruptionTypeEnded) {
                     NSError* e = nil;
-                    [session setActive:YES error:&e];
+                    // restore previous mode
+                    applyIosAudioSession(s_voiceActive);
                     log::info("AVAudioSession reactivated after interruption");
                 }
             }];
@@ -152,13 +160,17 @@ void setupIosAudioSession() {
 
 // Ensure session is active before each recordStart - idempotent
 void ensureIosAudioSessionActive() {
-    AVAudioSession* session = [AVAudioSession sharedInstance];
-    if (session.category != AVAudioSessionCategoryPlayAndRecord) {
-        setupIosAudioSession();
+    // Switch to VoiceChat mode if not already
+    if (!s_voiceActive) {
+        applyIosAudioSession(true);
     } else {
         NSError* error = nil;
-        [session setActive:YES error:&error];
+        [[AVAudioSession sharedInstance] setActive:YES error:&error];
     }
+}
+
+void setIosVoiceActive(bool active) {
+    applyIosAudioSession(active);
 }
 
 } // namespace globed

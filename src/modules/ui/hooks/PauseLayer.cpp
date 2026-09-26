@@ -132,11 +132,8 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
             auto toggler = CCMenuItemExt::createToggler(
                 onSpr, offSpr,
                 [this](CCMenuItemToggler* t) {
-                    bool on = !t->isToggled(); // isToggled = currently off state
-                    // Actually CCMenuItemToggler toggles after callback, so we invert logic: check new state via isToggled
-                    // Simpler: use s_iosVoiceToggleOn as source of truth
-                    s_iosVoiceToggleOn = !s_iosVoiceToggleOn;
-                    t->toggle(s_iosVoiceToggleOn);
+                    // CCMenuItemToggler already toggled before callback, isToggled() is new state
+                    s_iosVoiceToggleOn = t->isToggled();
 
                     auto gpl = GlobedGJBGL::get();
                     if (!gpl) return;
@@ -144,26 +141,34 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
                     if (s_iosVoiceToggleOn) {
                         // request mic permission if needed
                         if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
-                            geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [](bool granted){
-                                if (!granted) {
-                                    geode::queueInMainThread([]{
+                            geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [t](bool granted){
+                                geode::queueInMainThread([t, granted]{
+                                    if (!granted) {
                                         FLAlertLayer::create("Microphone", "Microphone permission denied. Enable in Settings > Privacy > Microphone.", "OK")->show();
-                                    });
-                                    s_iosVoiceToggleOn = false;
-                                    return;
-                                }
-                                extern void ensureIosAudioSessionActive();
-                                ensureIosAudioSessionActive();
-                                if (auto g = GlobedGJBGL::get()) g->resumeVoiceRecording();
+                                        s_iosVoiceToggleOn = false;
+                                        t->toggle(false);
+                                        extern void setIosVoiceActive(bool);
+                                        setIosVoiceActive(false);
+                                        return;
+                                    }
+                                    extern void ensureIosAudioSessionActive();
+                                    ensureIosAudioSessionActive();
+                                    if (auto g = GlobedGJBGL::get()) g->resumeVoiceRecording();
+                                });
                             });
+                            // revert toggle until permission granted
+                            if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
+                                // will be handled in callback
+                            }
                         } else {
                             extern void ensureIosAudioSessionActive();
                             ensureIosAudioSessionActive();
                             gpl->resumeVoiceRecording();
                         }
-                        // notification handled via toast elsewhere if needed
                     } else {
                         gpl->pauseVoiceRecording();
+                        extern void setIosVoiceActive(bool);
+                        setIosVoiceActive(false);
                     }
                 }
             );
@@ -330,7 +335,7 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
     void onResume(CCObject* s) {
         if (this->hasPopup()) return;
 #ifdef GEODE_IS_IOS
-        // Keep iOS voice toggle state after resuming
+        // Keep iOS voice toggle state after resuming, and restore audio session
         if (s_iosVoiceToggleOn) {
             if (auto g = GlobedGJBGL::get()) {
                 extern void ensureIosAudioSessionActive();
@@ -339,6 +344,8 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
             }
         } else {
             if (auto g = GlobedGJBGL::get()) g->pauseVoiceRecording();
+            extern void setIosVoiceActive(bool);
+            setIosVoiceActive(false);
         }
 #endif
         PauseLayer::onResume(s);
