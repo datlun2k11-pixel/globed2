@@ -122,6 +122,10 @@ void setupIosAudioSession() {
             log::warn("Failed to set AVAudioSession category: {}", [[error localizedDescription] UTF8String]);
         }
 
+        // VoiceChat mode enables hardware echo cancellation / AEC on iOS
+        // This fixes the "lặp tiếng / echo" when mic captures speaker output on loudspeaker
+        [session setMode:AVAudioSessionModeVoiceChat error:nil];
+
         // Set preferred sample rate to match Globed voice (48000 or 24000)
         [session setPreferredSampleRate:48000 error:nil];
         [session setPreferredIOBufferDuration:0.01 error:nil];
