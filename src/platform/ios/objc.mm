@@ -101,9 +101,12 @@ std::unique_ptr<unsigned char[]> getFileDataImpl(geode::ZStringView path, unsign
     return nullptr;
 }
 
-// Voice chat iOS audio session setup
-// Default (voice OFF): Playback category, Default mode -> game volume normal, no ducking
-// Voice ON: PlayAndRecord + VoiceChat mode -> enables AEC but ducks game audio intentionally
+// Voice chat iOS audio session setup - NO ducking by design (user adjusts music manually).
+// Default (voice OFF): Playback category, Default mode -> game volume normal.
+// Voice ON: PlayAndRecord + Default mode -> mic works, game stays loud.
+// NOTE: VoiceChat mode (hardware AEC) is intentionally NOT used because it ducks
+// the game audio. Trade-off: on loudspeaker without earphones the mic may pick up
+// game sound/echo - use earphones if echo occurs.
 static bool s_voiceActive = false;
 
 void applyIosAudioSession(bool voiceOn) {
@@ -112,16 +115,16 @@ void applyIosAudioSession(bool voiceOn) {
     AVAudioSession* session = [AVAudioSession sharedInstance];
 
     if (voiceOn) {
-        // Voice ON: PlayAndRecord + VoiceChat AEC - game will be slightly ducked (intentional)
+        // Voice ON: PlayAndRecord + Default mode - game stays loud, no ducking
         BOOL ok = [session setCategory:AVAudioSessionCategoryPlayAndRecord
                           withOptions:AVAudioSessionCategoryOptionAllowBluetooth
                                      | AVAudioSessionCategoryOptionAllowBluetoothA2DP
                                      | AVAudioSessionCategoryOptionDefaultToSpeaker
                                      | AVAudioSessionCategoryOptionMixWithOthers
-                                error:&error];
+                                 error:&error];
         if (!ok) log::warn("Failed to set PlayAndRecord: {}", [[error localizedDescription] UTF8String]);
-        [session setMode:AVAudioSessionModeVoiceChat error:nil];
-        log::info("iOS AVAudioSession: Voice ON (PlayAndRecord + VoiceChat AEC, game ducked)");
+        [session setMode:AVAudioSessionModeDefault error:nil];
+        log::info("iOS AVAudioSession: Voice ON (PlayAndRecord + Default, no ducking)");
     } else {
         // Voice OFF: Playback + Default mode -> restores full game volume
         BOOL ok = [session setCategory:AVAudioSessionCategoryPlayback
@@ -138,8 +141,8 @@ void applyIosAudioSession(bool voiceOn) {
 }
 
 // Idle in-level session (toggle OFF): mic stays ready but the game stays loud.
-// PlayAndRecord + Default mode, no VoiceChat processing/ducking. VoiceChat mode
-// (duck + AEC) is only applied when the user enables the PauseLayer toggle.
+// PlayAndRecord + Default mode, no ducking. Same configuration as voice ON -
+// the toggle now only controls whether your mic transmits, never the game volume.
 void applyIosAudioSessionIdle() {
     s_voiceActive = false;
     NSError* error = nil;
