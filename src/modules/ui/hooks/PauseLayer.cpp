@@ -172,7 +172,8 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
             newSpr->setScale(0.85f);
             btn->setNormalImage(newSpr);
             // need to reset content size
-            btn->setContentSize(newSpr->getContentSize() * 0.85f);
+            auto _cs = newSpr->getContentSize();
+            btn->setContentSize({_cs.width * 0.85f, _cs.height * 0.85f});
         }
 
         auto gpl = GlobedGJBGL::get();

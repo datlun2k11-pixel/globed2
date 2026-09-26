@@ -62,7 +62,7 @@ void VoiceTalkButton::updateVisibility() {
     bool shouldShow = globed::setting<bool>("core.audio.voice-chat-enabled");
     // Only show in levels where Globed is active, but we check GlobedGJBGL existence
     auto gjbgl = GlobedGJBGL::get();
-    bool active = gjbgl && gjbgl->m_fields->m_active;
+    bool active = gjbgl && gjbgl->active();
     this->setVisible(shouldShow && active);
     this->setTouchEnabled(shouldShow && active);
 }

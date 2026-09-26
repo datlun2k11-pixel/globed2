@@ -64,9 +64,10 @@ void GlobedGJBGL::Fields::cleanup() {
     am.haltRecording();
     am.stopAllOutputSources();
 #ifdef GEODE_IS_IOS
-    namespace globed { extern void setIosVoiceActive(bool); extern bool g_iosVoiceToggleOn; }
-    globed::setIosVoiceActive(false);
-    globed::g_iosVoiceToggleOn = false;
+    extern void setIosVoiceActive(bool);
+    extern bool g_iosVoiceToggleOn;
+    setIosVoiceActive(false);
+    g_iosVoiceToggleOn = false;
 #endif
 
     if (!m_active) {
@@ -1533,9 +1534,10 @@ void GlobedGJBGL::cleanupGlobedAdditions() {
     am.haltRecording();
     am.stopAllOutputSources();
 #ifdef GEODE_IS_IOS
-    namespace globed { extern void setIosVoiceActive(bool); extern bool g_iosVoiceToggleOn; }
-    globed::setIosVoiceActive(false);
-    globed::g_iosVoiceToggleOn = false;
+    extern void setIosVoiceActive(bool);
+    extern bool g_iosVoiceToggleOn;
+    setIosVoiceActive(false);
+    g_iosVoiceToggleOn = false;
 #endif
 
     auto& fields = *m_fields.self();
