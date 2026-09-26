@@ -482,9 +482,16 @@ Result<> AudioManager::threadStartRecording() {
     }
 
 #ifdef GEODE_IS_IOS
-    // Ensure AVAudioSession is active before FMOD recordStart, otherwise FMOD_ERR_RECORD
+    // Only switch to VoiceChat (ducked + AEC) when the PauseLayer toggle is ON.
+    // Otherwise keep a record-ready idle session so the game stays loud.
+    extern bool g_iosVoiceToggleOn;
     extern void ensureIosAudioSessionActive();
-    ensureIosAudioSessionActive();
+    extern void applyIosAudioSessionIdle();
+    if (g_iosVoiceToggleOn) {
+        ensureIosAudioSessionActive();
+    } else {
+        applyIosAudioSessionIdle();
+    }
 #endif
 
     if (!m_recordDevice) {

@@ -137,6 +137,29 @@ void applyIosAudioSession(bool voiceOn) {
     [session setActive:YES error:&error];
 }
 
+// Idle in-level session (toggle OFF): mic stays ready but the game stays loud.
+// PlayAndRecord + Default mode, no VoiceChat processing/ducking. VoiceChat mode
+// (duck + AEC) is only applied when the user enables the PauseLayer toggle.
+void applyIosAudioSessionIdle() {
+    s_voiceActive = false;
+    NSError* error = nil;
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+
+    BOOL ok = [session setCategory:AVAudioSessionCategoryPlayAndRecord
+                      withOptions:AVAudioSessionCategoryOptionAllowBluetooth
+                                     | AVAudioSessionCategoryOptionAllowBluetoothA2DP
+                                     | AVAudioSessionCategoryOptionDefaultToSpeaker
+                                     | AVAudioSessionCategoryOptionMixWithOthers
+                               error:&error];
+    if (!ok) log::warn("Failed to set PlayAndRecord (idle): {}", [[error localizedDescription] UTF8String]);
+    [session setMode:AVAudioSessionModeDefault error:nil];
+    log::info("iOS AVAudioSession: idle (PlayAndRecord + Default, game loud)");
+
+    [session setPreferredSampleRate:48000 error:nil];
+    [session setPreferredIOBufferDuration:0.01 error:nil];
+    [session setActive:YES error:&error];
+}
+
 void setupIosAudioSession() {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{

@@ -251,6 +251,19 @@ void GlobedGJBGL::setupAudio() {
     }
 #endif
 
+#ifdef GEODE_IS_IOS
+    // iOS toggle mode: entering a level must NOT duck the game audio.
+    // Stay loud until the user enables the PauseLayer voice toggle.
+    if (g_settings.voiceChat) {
+        extern bool g_iosVoiceToggleOn;
+        extern void applyIosAudioSessionIdle();
+        if (!g_iosVoiceToggleOn) {
+            am.pausePassiveRecording();
+            applyIosAudioSessionIdle();
+        }
+    }
+#endif
+
     auto winSize = CCDirector::get()->getWinSize();
 
     // enable voice proximity?
