@@ -53,14 +53,14 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
     struct Fields {
         CCMenu* m_rightMenu = nullptr;
         CCMenu* m_quickEmotePopup = nullptr;
+#ifdef GEODE_IS_IOS
         CCMenu* m_voiceMenu = nullptr;
+#endif
 
         ~Fields() {
             CachedSettings::get().reload();
         }
     };
-
-    void onVoiceToggle(CCObject* sender);
 
     $override
     void customSetup() {
@@ -160,6 +160,7 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
         this->schedule(schedule_selector(UIHookedPauseLayer::selUpdate), 0.f);
     }
 
+#ifdef GEODE_IS_IOS
     void onVoiceToggle(CCObject* sender) {
         s_iosVoiceToggleOn = !s_iosVoiceToggleOn;
 
@@ -218,6 +219,7 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
             Notification::create("Voice chat has been disabled", NotificationIcon::Info, 1.5f)->show();
         }
     }
+#endif
 
     void selUpdate(float dt) {
         if (auto pl = GlobedGJBGL::get()) {
