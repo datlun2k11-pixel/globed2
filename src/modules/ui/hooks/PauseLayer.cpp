@@ -127,10 +127,10 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
 #ifdef GEODE_IS_IOS
         // iOS voice toggle (pause menu) - separate CCMenu to avoid CancellableMenu double-tap
         if (globed::setting<bool>("core.audio.voice-chat-enabled")) {
-            // Create separate menu for voice toggle (top-left, avoids vanilla gear/edit buttons on the right edge)
+            // Create separate menu for voice toggle (bottom-right above emote button, easy to reach)
             auto voiceMenu = CCMenu::create();
             voiceMenu->setID("voice-toggle-menu"_spr);
-            voiceMenu->setPosition(52.f, winSize.height - 50.f);
+            voiceMenu->setPosition(winSize.width - 52.f, 24.f + 48.f * 2 + 20.f);
             voiceMenu->setContentSize({48.f, 48.f});
             voiceMenu->setAnchorPoint({0.5f, 0.5f});
             this->addChild(voiceMenu, 10);
