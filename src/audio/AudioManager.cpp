@@ -37,6 +37,11 @@ static float proximityVolumeMult(float distance) {
     return 1.0f - t * t;
 }
 
+// Discord-like voice prominence: extra gain applied to voice chat playback
+// so player voices sit above the game music. Multiplies on top of the
+// user-configurable "Voice Volume" slider.
+static constexpr float VOICE_CHAT_BOOST = 1.6f;
+
 GLOBED_EXPORT_SINGLETON(AudioManager, SingletonBase<AudioManager>);
 
 AudioManager::AudioManager()
@@ -352,7 +357,7 @@ float AudioManager::calculateVolume(AudioSource& src, const CCPoint& playerPos, 
         } break;
 
         case AudioKind::VoiceChat: {
-            targetVolume *= m_vcVolume;
+            targetVolume *= m_vcVolume * VOICE_CHAT_BOOST;
         } break;
 
         default: break;
