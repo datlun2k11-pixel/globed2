@@ -75,7 +75,13 @@ void AudioManager::preInitialize() {
     } catch (const std::exception& _e) {}
 #endif
 
-    // also check perms on android
+#ifdef GEODE_IS_IOS
+    // Setup AVAudioSession PlayAndRecord early for FMOD recording
+    extern void setupIosAudioSession();
+    setupIosAudioSession();
+#endif
+
+    // also check perms on android / ios
     if (!permission::getPermissionStatus(Permission::RecordAudio)) {
         m_recordDevice = std::nullopt;
         return;
@@ -474,6 +480,12 @@ Result<> AudioManager::threadStartRecording() {
     if (!permission::getPermissionStatus(Permission::RecordAudio)) {
         return Err("Recording failed, please grant microphone permission in Globed settings");
     }
+
+#ifdef GEODE_IS_IOS
+    // Ensure AVAudioSession is active before FMOD recordStart, otherwise FMOD_ERR_RECORD
+    extern void ensureIosAudioSessionActive();
+    ensureIosAudioSessionActive();
+#endif
 
     if (!m_recordDevice) {
         return Err("No recording device selected");

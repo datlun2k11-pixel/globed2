@@ -1,5 +1,8 @@
 #include "GJBaseGameLayer.hpp"
 #include <globed/audio/AudioManager.hpp>
+#ifdef GEODE_IS_IOS
+#include <platform/ios/VoiceTalkButton.hpp>
+#endif
 #include <globed/core/RoomManager.hpp>
 #include <globed/core/PlayerCacheManager.hpp>
 #include <globed/core/SettingsManager.hpp>
@@ -267,6 +270,19 @@ void GlobedGJBGL::setupAudio() {
                 .collect();
 
             self->m_fields->m_voiceOverlay->reposition();
+
+#ifdef GEODE_IS_IOS
+            // iOS hold-to-talk button
+            FunctionQueue::get().queue([self]{
+                auto winSize = CCDirector::get()->getWinSize();
+                if (auto btn = globed::VoiceTalkButton::create()) {
+                    btn->setPosition(winSize.width - 45.f, 45.f);
+                    btn->setZOrder(100);
+                    btn->setID("voice-talk-button"_spr);
+                    self->m_fields->m_uiNode->addChild(btn);
+                }
+            });
+#endif
         });
     }
 }

@@ -415,7 +415,11 @@ void SettingsLayer::addSettings() {
     // Audio
     this->addHeader("core.audio", "Audio", m_voiceTab);
     this->addSetting<BoolSettingCell>("core.audio.voice-chat-enabled", "Voice Chat",
+#ifdef GEODE_IS_IOS
+        "Enable in-game voice chat (hold the mic button in-level to talk). Requires <cb>Discord</c> account link and microphone permission."
+#else
         "Enable in-game voice chat (default keybind is V). Note: <cy>this is currently only supported on Windows, and requires you to link your </c><cb>Discord</c> <cy>account</c>."
+#endif
     );
     this->addSetting<FloatSettingCell>("core.audio.playback-volume", "Voice Volume",
         "Adjust the global voice chat volume."
@@ -431,6 +435,8 @@ void SettingsLayer::addSettings() {
             "Error",
 #ifdef GEODE_IS_MACOS
             "Microphone support is currently <cr>not available</c> on this platform, and is unlikely to be added in the future due to macOS restrictions."
+#elif defined(GEODE_IS_IOS)
+            "Voice chat is now supported on iOS! If you see this, please update the mod."
 #else
             "Microphone support is currently <cr>not available</c> on this platform."
 #endif

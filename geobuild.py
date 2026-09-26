@@ -369,7 +369,7 @@ def main(build: Build):
 
     if gc.voice:
         build.add_definition("GLOBED_VOICE_SUPPORT", "1")
-        if config.platform.is_windows():
+        if config.platform.is_windows() or config.platform.is_apple():
             build.add_definition("GLOBED_VOICE_CAN_TALK", "1")
 
     # Add geode dependencies
@@ -475,6 +475,8 @@ def main(build: Build):
         build.link_libraries("EGL", "GLESv2", "android")
     elif config.platform.is_apple():
         build.add_raw_statement(f"target_link_libraries({config.project_name} PRIVATE \"-framework Security\")")
+        if config.platform.is_ios():
+            build.add_raw_statement(f"target_link_libraries({config.project_name} PRIVATE \"-framework AVFoundation\")")
 
     build.silence_warnings_for("kj")
     build.silence_warnings_for("capnp")

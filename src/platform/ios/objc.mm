@@ -1,5 +1,7 @@
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
 #include <core/preload/PreloadManager.hpp>
+#include <Geode/utils/permission.hpp>
 
 extern "C" {
 
@@ -99,4 +101,73 @@ std::unique_ptr<unsigned char[]> getFileDataImpl(geode::ZStringView path, unsign
     return nullptr;
 }
 
+// Voice chat iOS audio session setup - required for FMOD recording on iOS
+// Must use PlayAndRecord category, otherwise System::recordStart returns FMOD_ERR_RECORD
+void setupIosAudioSession() {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSError* error = nil;
+        AVAudioSession* session = [AVAudioSession sharedInstance];
+
+        // PlayAndRecord is mandatory for simultaneous playback + mic capture via FMOD
+        // AllowBluetooth enables AirPods / BT headset, DefaultToSpeaker uses loudspeaker (not earpiece)
+        // MixWithOthers allows GD music to keep playing
+        BOOL ok = [session setCategory:AVAudioSessionCategoryPlayAndRecord
+                          withOptions:AVAudioSessionCategoryOptionAllowBluetooth
+                                     | AVAudioSessionCategoryOptionAllowBluetoothA2DP
+                                     | AVAudioSessionCategoryOptionDefaultToSpeaker
+                                     | AVAudioSessionCategoryOptionMixWithOthers
+                                error:&error];
+        if (!ok) {
+            log::warn("Failed to set AVAudioSession category: {}", [[error localizedDescription] UTF8String]);
+        }
+
+        // Set preferred sample rate to match Globed voice (48000 or 24000)
+        [session setPreferredSampleRate:48000 error:nil];
+        [session setPreferredIOBufferDuration:0.01 error:nil];
+
+        ok = [session setActive:YES error:&error];
+        if (!ok) {
+            log::warn("Failed to activate AVAudioSession: {}", [[error localizedDescription] UTF8String]);
+        } else {
+            log::info("iOS AVAudioSession configured for voice chat (PlayAndRecord)");
+        }
+
+        // Listen for interruptions (phone call, Siri) to reactivate session
+        [[NSNotificationCenter defaultCenter] addObserverForName:AVAudioSessionInterruptionNotification
+            object:session queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note) {
+                NSInteger type = [note.userInfo[AVAudioSessionInterruptionTypeKey] integerValue];
+                if (type == AVAudioSessionInterruptionTypeEnded) {
+                    NSError* e = nil;
+                    [session setActive:YES error:&e];
+                    log::info("AVAudioSession reactivated after interruption");
+                }
+            }];
+    });
+}
+
+// Ensure session is active before each recordStart - idempotent
+void ensureIosAudioSessionActive() {
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+    if (session.category != AVAudioSessionCategoryPlayAndRecord) {
+        setupIosAudioSession();
+    } else {
+        NSError* error = nil;
+        [session setActive:YES error:&error];
+    }
+}
+
+} // namespace globed
+
+// Hook early via mod load - called from AudioManager::preInitialize on iOS
+namespace {
+struct IosAudioSessionInit {
+    IosAudioSessionInit() {
+        // delay until main thread, ensure called once
+        geode::queueInMainThread([]{
+            globed::setupIosAudioSession();
+        });
+    }
+};
+static IosAudioSessionInit _iosAudioInit;
 }
