@@ -25,7 +25,8 @@ namespace globed {
 
 #ifdef GEODE_IS_IOS
 // Persistent toggle state for iOS pause menu voice (open mic)
-static bool s_iosVoiceToggleOn = false;
+bool g_iosVoiceToggleOn = false;
+#define s_iosVoiceToggleOn g_iosVoiceToggleOn
 #endif
 
 struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseLayer> {
@@ -52,11 +53,14 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
     struct Fields {
         CCMenu* m_rightMenu = nullptr;
         CCMenu* m_quickEmotePopup = nullptr;
+        CCMenu* m_voiceMenu = nullptr;
 
         ~Fields() {
             CachedSettings::get().reload();
         }
     };
+
+    void onVoiceToggle(CCObject* sender);
 
     $override
     void customSetup() {
@@ -121,66 +125,29 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
         }
 
 #ifdef GEODE_IS_IOS
-        // iOS voice toggle (pause menu) - replaces hold-to-talk
+        // iOS voice toggle (pause menu) - separate CCMenu to avoid CancellableMenu double-tap
         if (globed::setting<bool>("core.audio.voice-chat-enabled")) {
-            auto onSpr = Build<CCSprite>::create("deafen-icon-off.png"_spr).scale(0.85f).collect();
-            auto offSpr = Build<CCSprite>::create("deafen-icon-on.png"_spr).scale(0.85f).collect();
-            // Fallback if sprites missing
-            if (!onSpr) onSpr = CCSprite::createWithSpriteFrameName("GJ_button_01.png");
-            if (!offSpr) offSpr = CCSprite::createWithSpriteFrameName("GJ_button_02.png");
+            // Create separate menu for voice toggle (top, avoids CancellableMenu double-tap)
+            auto voiceMenu = CCMenu::create();
+            voiceMenu->setID("voice-toggle-menu"_spr);
+            voiceMenu->setPosition(winSize.width - 52.f, winSize.height - 50.f);
+            voiceMenu->setContentSize({48.f, 48.f});
+            voiceMenu->setAnchorPoint({0.5f, 0.5f});
+            this->addChild(voiceMenu);
+            m_fields->m_voiceMenu = voiceMenu;
 
-            auto toggler = CCMenuItemExt::createToggler(
-                onSpr, offSpr,
-                [this](CCMenuItemToggler* t) {
-                    // CCMenuItemToggler already toggled before callback, isToggled() is new state
-                    s_iosVoiceToggleOn = t->isToggled();
+            auto sprName = s_iosVoiceToggleOn ? "deafen-icon-off.png"_spr : "deafen-icon-on.png"_spr;
+            auto spr = CCSprite::create(sprName);
+            if (!spr) spr = CCSprite::createWithSpriteFrameName("GJ_button_01.png");
+            spr->setScale(0.85f);
 
-                    auto gpl = GlobedGJBGL::get();
-                    if (!gpl) return;
-
-                    if (s_iosVoiceToggleOn) {
-                        // request mic permission if needed
-                        if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
-                            geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [t](bool granted){
-                                geode::queueInMainThread([t, granted]{
-                                    if (!granted) {
-                                        FLAlertLayer::create("Microphone", "Microphone permission denied. Enable in Settings > Privacy > Microphone.", "OK")->show();
-                                        s_iosVoiceToggleOn = false;
-                                        t->toggle(false);
-                                        extern void setIosVoiceActive(bool);
-                                        setIosVoiceActive(false);
-                                        return;
-                                    }
-                                    extern void ensureIosAudioSessionActive();
-                                    ensureIosAudioSessionActive();
-                                    if (auto g = GlobedGJBGL::get()) g->resumeVoiceRecording();
-                                });
-                            });
-                            // revert toggle until permission granted
-                            if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
-                                // will be handled in callback
-                            }
-                        } else {
-                            extern void ensureIosAudioSessionActive();
-                            ensureIosAudioSessionActive();
-                            gpl->resumeVoiceRecording();
-                        }
-                    } else {
-                        gpl->pauseVoiceRecording();
-                        extern void setIosVoiceActive(bool);
-                        setIosVoiceActive(false);
-                    }
-                }
-            );
-            toggler->toggle(s_iosVoiceToggleOn);
-            toggler->setID("btn-voice-toggle"_spr);
-            // scale up a bit for mobile
-            toggler->setScale(1.05f);
-            menu->addChild(toggler);
+            auto btn = CCMenuItemSpriteExtra::create(spr, nullptr, this, menu_selector(UIHookedPauseLayer::onVoiceToggle));
+            btn->setID("btn-voice-toggle"_spr);
+            voiceMenu->addChild(btn);
+            btn->setPosition(voiceMenu->getContentSize() / 2);
 
             // If toggle was ON before pausing, ensure voice stays ON while in pause menu
             if (s_iosVoiceToggleOn) {
-                // ensure session active and resume
                 extern void ensureIosAudioSessionActive();
                 ensureIosAudioSessionActive();
                 gpl->resumeVoiceRecording();
@@ -191,6 +158,65 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
         menu->updateLayout();
 
         this->schedule(schedule_selector(UIHookedPauseLayer::selUpdate), 0.f);
+    }
+
+    void onVoiceToggle(CCObject* sender) {
+        s_iosVoiceToggleOn = !s_iosVoiceToggleOn;
+
+        // Update button sprite
+        if (auto btn = static_cast<CCMenuItemSpriteExtra*>(sender)) {
+            auto newName = s_iosVoiceToggleOn ? "deafen-icon-off.png"_spr : "deafen-icon-on.png"_spr;
+            auto newSpr = CCSprite::create(newName);
+            if (!newSpr) newSpr = CCSprite::createWithSpriteFrameName("GJ_button_01.png");
+            newSpr->setScale(0.85f);
+            btn->setNormalImage(newSpr);
+            // need to reset content size
+            btn->setContentSize(newSpr->getContentSize() * 0.85f);
+        }
+
+        auto gpl = GlobedGJBGL::get();
+        if (!gpl) return;
+
+        extern void ensureIosAudioSessionActive();
+        extern void setIosVoiceActive(bool);
+
+        if (s_iosVoiceToggleOn) {
+            if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
+                geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [this](bool granted){
+                    geode::queueInMainThread([this, granted]{
+                        if (!granted) {
+                            FLAlertLayer::create("Microphone", "Microphone permission denied. Enable in Settings > Privacy > Microphone.", "OK")->show();
+                            s_iosVoiceToggleOn = false;
+                            setIosVoiceActive(false);
+                            // revert sprite
+                            if (auto menu = m_fields->m_voiceMenu) {
+                                if (auto btn = menu->getChildByType<CCMenuItemSpriteExtra>(0)) {
+                                    auto spr = CCSprite::create("deafen-icon-on.png"_spr);
+                                    if (spr) { spr->setScale(0.85f); btn->setNormalImage(spr); }
+                                }
+                            }
+                            Notification::create("Voice chat has been disabled", NotificationIcon::Error, 1.5f)->show();
+                            return;
+                        }
+                        ensureIosAudioSessionActive();
+                        if (auto g = GlobedGJBGL::get()) g->resumeVoiceRecording();
+                        Notification::create("Voice chat has been enabled", NotificationIcon::Success, 1.5f)->show();
+                    });
+                });
+                // optimistically show enabled, will revert if denied
+                Notification::create("Voice chat has been enabled", NotificationIcon::Success, 1.5f)->show();
+                ensureIosAudioSessionActive();
+                gpl->resumeVoiceRecording();
+            } else {
+                ensureIosAudioSessionActive();
+                gpl->resumeVoiceRecording();
+                Notification::create("Voice chat has been enabled", NotificationIcon::Success, 1.5f)->show();
+            }
+        } else {
+            gpl->pauseVoiceRecording();
+            setIosVoiceActive(false);
+            Notification::create("Voice chat has been disabled", NotificationIcon::Info, 1.5f)->show();
+        }
     }
 
     void selUpdate(float dt) {

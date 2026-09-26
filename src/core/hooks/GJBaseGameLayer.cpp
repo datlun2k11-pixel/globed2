@@ -63,6 +63,11 @@ void GlobedGJBGL::Fields::cleanup() {
     auto& am = AudioManager::get();
     am.haltRecording();
     am.stopAllOutputSources();
+#ifdef GEODE_IS_IOS
+    namespace globed { extern void setIosVoiceActive(bool); extern bool g_iosVoiceToggleOn; }
+    globed::setIosVoiceActive(false);
+    globed::g_iosVoiceToggleOn = false;
+#endif
 
     if (!m_active) {
         return;
@@ -1527,6 +1532,11 @@ void GlobedGJBGL::cleanupGlobedAdditions() {
     auto& am = AudioManager::get();
     am.haltRecording();
     am.stopAllOutputSources();
+#ifdef GEODE_IS_IOS
+    namespace globed { extern void setIosVoiceActive(bool); extern bool g_iosVoiceToggleOn; }
+    globed::setIosVoiceActive(false);
+    globed::g_iosVoiceToggleOn = false;
+#endif
 
     auto& fields = *m_fields.self();
     cue::resetNode(fields.m_playerNode);
