@@ -2,6 +2,7 @@
 #include <globed/core/RoomManager.hpp>
 #include <globed/core/PopupManager.hpp>
 #include <globed/core/EmoteManager.hpp>
+#include <globed/audio/AudioManager.hpp>
 #include <core/net/NetworkManagerImpl.hpp>
 #include <core/game/SettingCache.hpp>
 #include <core/hooks/GJBaseGameLayer.hpp>
@@ -10,6 +11,9 @@
 #include <modules/ui/UIModule.hpp>
 #include <modules/ui/popups/UserListPopup.hpp>
 #include <modules/ui/popups/EmoteListPopup.hpp>
+#ifdef GEODE_IS_IOS
+#include <Geode/utils/permission.hpp>
+#endif
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PauseLayer.hpp>
@@ -18,6 +22,11 @@
 using namespace geode::prelude;
 
 namespace globed {
+
+#ifdef GEODE_IS_IOS
+// Persistent toggle state for iOS pause menu voice (open mic)
+static bool s_iosVoiceToggleOn = false;
+#endif
 
 struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseLayer> {
     static void onModify(auto& self) {
@@ -57,7 +66,14 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
         if (!gpl || !gpl->active()) return;
 
         // prevent some keybinds from being active in pause menu
+#ifdef GEODE_IS_IOS
+        // iOS toggle mode: don't auto-mute, keep toggle state
+        if (!s_iosVoiceToggleOn) {
+            gpl->pauseVoiceRecording();
+        }
+#else
         gpl->pauseVoiceRecording();
+#endif
 
         auto& fields = *m_fields.self();
 
@@ -103,6 +119,74 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
             btn->setID("btn-open-emotelist"_spr);
             menu->addChild(btn);
         }
+
+#ifdef GEODE_IS_IOS
+        // iOS voice toggle (pause menu) - replaces hold-to-talk
+        if (globed::setting<bool>("core.audio.voice-chat-enabled")) {
+            auto onSpr = Build<CCSprite>::create("deafen-icon-off.png"_spr).scale(0.85f).collect();
+            auto offSpr = Build<CCSprite>::create("deafen-icon-on.png"_spr).scale(0.85f).collect();
+            // Fallback if sprites missing
+            if (!onSpr) onSpr = CCSprite::createWithSpriteFrameName("GJ_button_01.png");
+            if (!offSpr) offSpr = CCSprite::createWithSpriteFrameName("GJ_button_02.png");
+
+            auto toggler = CCMenuItemExt::createToggler(
+                onSpr, offSpr,
+                [this](CCMenuItemToggler* t) {
+                    bool on = !t->isToggled(); // isToggled = currently off state
+                    // Actually CCMenuItemToggler toggles after callback, so we invert logic: check new state via isToggled
+                    // Simpler: use s_iosVoiceToggleOn as source of truth
+                    s_iosVoiceToggleOn = !s_iosVoiceToggleOn;
+                    t->toggle(s_iosVoiceToggleOn);
+
+                    auto gpl = GlobedGJBGL::get();
+                    if (!gpl) return;
+
+                    if (s_iosVoiceToggleOn) {
+                        // request mic permission if needed
+                        if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
+                            geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [](bool granted){
+                                if (!granted) {
+                                    geode::queueInMainThread([]{
+                                        FLAlertLayer::create("Microphone", "Microphone permission denied. Enable in Settings > Privacy > Microphone.", "OK")->show();
+                                    });
+                                    s_iosVoiceToggleOn = false;
+                                    return;
+                                }
+                                extern void ensureIosAudioSessionActive();
+                                ensureIosAudioSessionActive();
+                                if (auto g = GlobedGJBGL::get()) g->resumeVoiceRecording();
+                            });
+                        } else {
+                            extern void ensureIosAudioSessionActive();
+                            ensureIosAudioSessionActive();
+                            gpl->resumeVoiceRecording();
+                        }
+                        if (globed::setting<bool>("core.audio.deafen-notification")) {
+                            NotificationPanel::get()->addNotification("Voice: ON (mic open)");
+                        }
+                    } else {
+                        gpl->pauseVoiceRecording();
+                        if (globed::setting<bool>("core.audio.deafen-notification")) {
+                            NotificationPanel::get()->addNotification("Voice: OFF (muted)");
+                        }
+                    }
+                }
+            );
+            toggler->toggle(s_iosVoiceToggleOn);
+            toggler->setID("btn-voice-toggle"_spr);
+            // scale up a bit for mobile
+            toggler->setScale(1.05f);
+            menu->addChild(toggler);
+
+            // If toggle was ON before pausing, ensure voice stays ON while in pause menu
+            if (s_iosVoiceToggleOn) {
+                // ensure session active and resume
+                extern void ensureIosAudioSessionActive();
+                ensureIosAudioSessionActive();
+                gpl->resumeVoiceRecording();
+            }
+        }
+#endif
 
         menu->updateLayout();
 
@@ -248,7 +332,22 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
         } \
     }
 
-    REPLACE(onResume);
+    void onResume(CCObject* s) {
+        if (this->hasPopup()) return;
+#ifdef GEODE_IS_IOS
+        // Keep iOS voice toggle state after resuming
+        if (s_iosVoiceToggleOn) {
+            if (auto g = GlobedGJBGL::get()) {
+                extern void ensureIosAudioSessionActive();
+                ensureIosAudioSessionActive();
+                g->resumeVoiceRecording();
+            }
+        } else {
+            if (auto g = GlobedGJBGL::get()) g->pauseVoiceRecording();
+        }
+#endif
+        PauseLayer::onResume(s);
+    }
     REPLACE(onNormalMode);
     REPLACE(onPracticeMode);
 
