@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #include <core/preload/PreloadManager.hpp>
+#include <globed/core/SettingsManager.hpp>
 #include <Geode/utils/permission.hpp>
 
 extern "C" {
@@ -104,9 +105,9 @@ std::unique_ptr<unsigned char[]> getFileDataImpl(geode::ZStringView path, unsign
 // Voice chat iOS audio session setup - NO ducking by design (user adjusts music manually).
 // Default (voice OFF): Playback category, Default mode -> game volume normal.
 // Voice ON: PlayAndRecord + Default mode -> mic works, game stays loud.
-// NOTE: VoiceChat mode (hardware AEC) is intentionally NOT used because it ducks
-// the game audio. Trade-off: on loudspeaker without earphones the mic may pick up
-// game sound/echo - use earphones if echo occurs.
+// NOTE: VoiceChat mode (hardware AEC) is only used when the "Duck Volume"
+// setting is enabled, because it ducks the game audio. With the option off
+// the game stays loud - use earphones if echo occurs on loudspeaker.
 static bool s_voiceActive = false;
 
 void applyIosAudioSession(bool voiceOn) {
@@ -163,6 +164,8 @@ void applyIosAudioSessionIdle() {
     [session setActive:YES error:&error];
 }
 
+static void applyDuckMode();
+
 void setupIosAudioSession() {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -178,21 +181,35 @@ void setupIosAudioSession() {
                     NSError* e = nil;
                     // restore previous mode
                     applyIosAudioSession(s_voiceActive);
+                    if (s_voiceActive) applyDuckMode();
                     log::info("AVAudioSession reactivated after interruption");
                 }
             }];
     });
 }
 
+// Applies the "Duck Volume" user option while talking: VoiceChat mode ducks
+// the game audio but enables hardware echo cancellation (AEC).
+static void applyDuckMode() {
+    bool duck = globed::setting<bool>("core.audio.duck-volume");
+    if (duck) {
+        [[AVAudioSession sharedInstance] setMode:AVAudioSessionModeVoiceChat error:nil];
+        log::info("iOS AVAudioSession: duck ON (VoiceChat mode, game ducked + AEC)");
+    } else {
+        [[AVAudioSession sharedInstance] setMode:AVAudioSessionModeDefault error:nil];
+    }
+}
+
 // Ensure session is active before each recordStart - idempotent
 void ensureIosAudioSessionActive() {
-    // Switch to VoiceChat mode if not already
+    // Switch to voice config if not already
     if (!s_voiceActive) {
         applyIosAudioSession(true);
     } else {
         NSError* error = nil;
         [[AVAudioSession sharedInstance] setActive:YES error:&error];
     }
+    applyDuckMode();
 }
 
 void setIosVoiceActive(bool active) {

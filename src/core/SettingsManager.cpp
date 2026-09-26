@@ -115,6 +115,7 @@ SettingsManager::SettingsManager() {
 
     this->registerSetting(Setting::Audio::PlaybackVolume, 1.f);
     this->registerLimits(Setting::Audio::PlaybackVolume, 0.f, 2.f);
+    this->registerSetting(Setting::Audio::DuckVolume, false);
 
     this->registerSetting(Setting::Audio::VoiceProximity, true);
     this->registerSetting(Setting::Audio::ClassicProximity, false);

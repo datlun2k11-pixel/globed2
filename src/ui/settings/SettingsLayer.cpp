@@ -424,6 +424,11 @@ void SettingsLayer::addSettings() {
     this->addSetting<FloatSettingCell>("core.audio.playback-volume", "Voice Volume",
         "Adjust the global voice chat volume."
     );
+#ifdef GEODE_IS_IOS
+    this->addSetting<BoolSettingCell>("core.audio.duck-volume", "Duck Volume",
+        "Reduce the game volume when voice chat is turned on in-game, reduces echo."
+    );
+#endif
     this->addSetting(ButtonSettingCell::create(
         "Audio Device",
         "Sets the used input device for voice chat.",

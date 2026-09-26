@@ -378,6 +378,7 @@ namespace Audio {
     inline constexpr auto OverlayingOverlay = "core.audio.overlaying-overlay";
     inline constexpr auto BufferSize = "core.audio.buffer-size";
     inline constexpr auto PlaybackVolume = "core.audio.playback-volume";
+    inline constexpr auto DuckVolume = "core.audio.duck-volume";
     inline constexpr auto VoiceProximity = "core.audio.voice-proximity";
     inline constexpr auto ClassicProximity = "core.audio.classic-proximity";
     inline constexpr auto DeafenNotification = "core.audio.deafen-notification";
