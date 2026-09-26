@@ -161,14 +161,9 @@ struct GLOBED_MODIFY_ATTR UIHookedPauseLayer : Modify<UIHookedPauseLayer, PauseL
                             ensureIosAudioSessionActive();
                             gpl->resumeVoiceRecording();
                         }
-                        if (globed::setting<bool>("core.audio.deafen-notification")) {
-                            NotificationPanel::get()->addNotification("Voice: ON (mic open)");
-                        }
+                        // notification handled via toast elsewhere if needed
                     } else {
                         gpl->pauseVoiceRecording();
-                        if (globed::setting<bool>("core.audio.deafen-notification")) {
-                            NotificationPanel::get()->addNotification("Voice: OFF (muted)");
-                        }
                     }
                 }
             );
