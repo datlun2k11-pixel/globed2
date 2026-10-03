@@ -20,6 +20,7 @@
 #include <Geode/loader/GameEvent.hpp>
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/utils/VMTHookManager.hpp>
+#include <Geode/utils/permission.hpp>
 #include <UIBuilder.hpp>
 #include <asp/time/Instant.hpp>
 #include <asp/iter.hpp>
@@ -1409,6 +1410,27 @@ void GlobedGJBGL::resumeVoiceRecording() {
     if (!g_settings.voiceChat) return;
 
     auto& am = AudioManager::get();
+#ifdef GEODE_IS_MACOS
+    // macOS: ask for mic permission on first talk (V key), like iOS does.
+    // Without this, threadStartRecording fails with "grant microphone permission".
+    static bool s_macosMicRequested = false;
+    if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
+        if (!s_macosMicRequested) {
+            s_macosMicRequested = true;
+            geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [](bool granted) {
+                geode::queueInMainThread([granted] {
+                    if (!granted) {
+                        FLAlertLayer::create("Microphone", "Microphone permission denied. Enable it in System Settings > Privacy & Security > Microphone.", "OK")->show();
+                    } else if (auto g = GlobedGJBGL::get()) {
+                        g->resumeVoiceRecording();
+                    }
+                });
+            });
+        }
+        return;
+    }
+    s_macosMicRequested = false;
+#endif
     if (am.getDeafen()) {
         auto kbs = Mod::get()->getSettingValue<std::vector<Keybind>>("keybind-deafen");
         std::string kbstr = kbs.empty() ? "<unbound>" : kbs[0].toString();

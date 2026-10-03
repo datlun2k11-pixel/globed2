@@ -3,6 +3,7 @@
 #include <UIBuilder.hpp>
 #include <globed/audio/AudioManager.hpp>
 #include <asp/iter.hpp>
+#include <Geode/utils/permission.hpp>
 
 using namespace geode::prelude;
 
@@ -85,6 +86,21 @@ bool AudioDeviceSetupPopup::init() {
     if (!BasePopup::init(POPUP_SIZE)) return false;
 
     this->setID("AudioSetupPopup"_spr);
+
+#ifdef GEODE_IS_MACOS
+    // macOS: request mic permission when opening device setup,
+    // otherwise FMOD recordStart will fail silently.
+    if (!geode::utils::permission::getPermissionStatus(geode::utils::permission::Permission::RecordAudio)) {
+        geode::utils::permission::requestPermission(geode::utils::permission::Permission::RecordAudio, [this](bool granted) {
+            geode::queueInMainThread([this, granted] {
+                if (!granted) {
+                    FLAlertLayer::create("Microphone", "Microphone permission denied. Enable it in System Settings > Privacy & Security > Microphone.", "OK")->show();
+                }
+                this->refreshList();
+            });
+        });
+    }
+#endif
 
     auto menu = Build<CCMenu>::create()
         .pos(0.f, 0.f)

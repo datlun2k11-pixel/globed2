@@ -417,8 +417,10 @@ void SettingsLayer::addSettings() {
     this->addSetting<BoolSettingCell>("core.audio.voice-chat-enabled", "Voice Chat",
 #ifdef GEODE_IS_IOS
         "Enable in-game voice chat (hold the mic button in-level to talk). Requires <cb>Discord</c> account link and microphone permission."
+#elif defined(GEODE_IS_MACOS)
+        "Enable in-game voice chat (default keybind is V). Requires <cb>Discord</c> account link and microphone permission."
 #else
-        "Enable in-game voice chat (default keybind is V). Note: <cy>this is currently only supported on Windows, and requires you to link your </c><cb>Discord</c> <cy>account</c>."
+        "Enable in-game voice chat (default keybind is V). Note: <cy>this is currently only supported on Windows and macOS, and requires you to link your </c><cb>Discord</c> <cy>account</c>."
 #endif
     );
     this->addSetting<FloatSettingCell>("core.audio.playback-volume", "Voice Volume",
